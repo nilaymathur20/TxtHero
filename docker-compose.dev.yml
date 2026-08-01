@@ -1,0 +1,53 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: dockerfile
+      target: development
+    init: true
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - txthero-documents-dev:/app/documents
+    environment:
+      ENV: development
+      HOST: 0.0.0.0
+      PORT: 8000
+      FRONTEND_ORIGIN: http://localhost:3000
+      TXTHERO_STORAGE_DIR: /app/documents
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - txthero-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: dockerfile
+      target: development
+    init: true
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_WS_URL: ws://localhost:8000
+      WEBSOCKET_URL: ws://backend:8000
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-development-only-secret-change-me}
+      BETTER_AUTH_URL: http://localhost:3000
+      TXTHERO_USER_DATA_DIR: /app/storage
+      TXTHERO_UPLOAD_DIR: /app/storage/uploads
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - txthero-network
+
+volumes:
+  txthero-documents-dev:
+
+networks:
+  txthero-network:

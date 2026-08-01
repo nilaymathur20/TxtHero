@@ -1,0 +1,89 @@
+{
+  "name": "txthero",
+  "version": "1.2.0",
+  "description": "A focused writing workspace with a Next.js frontend and FastAPI backend",
+  "private": true,
+  "main": "electron/main.js",
+  "scripts": {
+    "backend": "backend/venv/bin/python -m uvicorn app.main:app --reload --app-dir backend --host 127.0.0.1 --port 8000",
+    "frontend": "npm --prefix frontend run dev",
+    "electron": "wait-on http://127.0.0.1:3000 && electron . --dev",
+    "dev": "concurrently -k -n BACKEND,FRONTEND,ELECTRON -c green,cyan,magenta \"npm run backend\" \"npm run frontend\" \"npm run electron\"",
+    "dev:web": "concurrently -k -n BACKEND,FRONTEND -c green,cyan \"npm run backend\" \"npm run frontend\"",
+    "build": "npm --prefix frontend run build",
+    "build:backend:linux": "backend/venv/bin/python -m PyInstaller --clean --noconfirm --distpath backend/dist --workpath backend/build backend/txthero-backend.spec",
+    "start": "npm --prefix frontend run start",
+    "dist:linux": "npm run build && npm run build:backend:linux && electron-builder --linux deb",
+    "dist:windows": "npm run build && electron-builder --win nsis",
+    "dist:mac": "npm run build && electron-builder --mac dmg",
+    "dist:all": "npm run build && electron-builder --linux deb --win nsis --mac dmg"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3",
+    "electron": "^43.1.1",
+    "electron-builder": "^26.15.3",
+    "wait-on": "^9.0.10"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "overrides": {
+    "shell-quote": "^1.10.0"
+  },
+  "build": {
+    "appId": "com.txthero.app",
+    "productName": "TxtHero",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "frontend/.next/standalone/frontend",
+        "to": "frontend"
+      },
+      {
+        "from": "frontend/.next/standalone/node_modules",
+        "to": "node_modules"
+      },
+      {
+        "from": "frontend/.next/standalone/frontend/node_modules",
+        "to": "frontend/node_modules"
+      },
+      {
+        "from": "frontend/.next/static",
+        "to": "frontend/.next/static"
+      },
+      {
+        "from": "frontend/public",
+        "to": "frontend/public"
+      },
+      {
+        "from": "backend/dist/txthero-backend",
+        "to": "backend/txthero-backend"
+      }
+    ],
+    "linux": {
+      "target": [
+        "deb",
+        "AppImage"
+      ],
+      "category": "Utility",
+      "maintainer": "TxtHero",
+      "executableArgs": [
+        "--no-sandbox"
+      ]
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.productivity"
+    }
+  }
+}

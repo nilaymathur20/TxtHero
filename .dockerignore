@@ -1,0 +1,40 @@
+# Node
+node_modules
+npm-debug.log*
+
+# Python
+venv
+.venv
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+
+# Next.js
+.next
+out
+
+# Editor
+.vscode
+.idea
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Docs
+*.md
+!README.md
+
+# Electron (not needed in Docker)
+electron
+release
+
+# Env files
+.env.local
+.env.*.local

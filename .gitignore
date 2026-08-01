@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+node_modules/
+.next/
+frontend/.next/
+frontend/out/
+.env
+.env.local
+frontend/storage/
+frontend/.env.local
+
+# Generated backend packages and local document data
+backend/build/
+backend/dist/
+backend/documents/
