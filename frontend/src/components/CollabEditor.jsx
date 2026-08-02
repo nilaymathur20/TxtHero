@@ -147,7 +147,10 @@ export default function CollabEditor() {
       {error && <div className="live-session-error">{error}</div>}
       <section className="collab-body">
         <aside><UserPresence users={collab.users} identity={identity} onRename={localIdentity.setDisplayName} session={sessionView} credential={credential} onApprove={(requestId, approved) => hostAction(`/requests/${requestId}/${approved ? "approve" : "reject"}`)} onRole={(id, role) => hostAction(`/participants/${id}`, "patch", { role })} onRemove={(id) => hostAction(`/participants/${id}`, "delete")} onEnd={endSession} /></aside>
-        <div className="collab-workspace"><Editor documentId={documentId} session={collab} identity={identity} role={credential.role} /></div>
+        <div className="collab-workspace">{collab.ydoc && collab.provider
+          ? <Editor documentId={documentId} session={collab} identity={identity} role={credential.role} />
+          : <div className="collab-loading">Connecting and loading the latest CRDT state…</div>}
+        </div>
       </section>
       {collab.notice && <div className="collab-toast" key={collab.notice.id}>{collab.notice.text}</div>}
       <Toaster position="bottom-right" />

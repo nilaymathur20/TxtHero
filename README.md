@@ -15,6 +15,7 @@ TxtHero now has two complementary editing modes:
 - [Desktop Packages](#desktop-packages)
 - [REST API Reference](#rest-api-reference)
 - [WebSocket Collaboration](#websocket-collaboration)
+- [Live Collaboration Checklist](LIVE_COLLABORATION_CHECKLIST.md)
 - [Code Blocks & Shortcuts](#code-blocks--shortcuts)
 - [Font Library](#font-library)
 - [Universal Formatter](#universal-formatter)

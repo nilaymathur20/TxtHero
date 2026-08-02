@@ -9,7 +9,6 @@ import FontFamily from "@tiptap/extension-font-family";
 import Highlight from "@tiptap/extension-highlight";
 import Placeholder from "@tiptap/extension-placeholder";
 import { TextStyle } from "@tiptap/extension-text-style";
-import Underline from "@tiptap/extension-underline";
 import StarterKit from "@tiptap/starter-kit";
 import { EditorContent, ReactNodeViewRenderer, useEditor } from "@tiptap/react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -36,7 +35,7 @@ export default function Editor({ documentId, session, identity, role = "editor" 
       StarterKit.configure({ codeBlock: false, undoRedo: documentId ? false : {} }),
       TextStyle,
       Color.configure({ types: [TextStyle.name] }),
-      FontFamily, Underline, Highlight, Placeholder.configure({ placeholder: "Start writing something wonderful…" }),
+      FontFamily, Highlight, Placeholder.configure({ placeholder: "Start writing something wonderful…" }),
       CollaborativeCodeBlock,
     ];
     if (documentId && session?.ydoc && session?.provider) base.push(
@@ -46,8 +45,9 @@ export default function Editor({ documentId, session, identity, role = "editor" 
     return base;
   }, [documentId, session?.ydoc, session?.provider, identity?.id]);
 
-  const editor = useEditor({ immediatelyRender: false, extensions, editable: role !== "viewer", editorProps: { attributes: { class: "collab-tiptap" } } }, [extensions, role]);
+  const editor = useEditor({ immediatelyRender: false, extensions, editable: role !== "viewer", editorProps: { attributes: { class: "collab-tiptap" } } }, [extensions]);
   useEffect(() => { if (editor && identity && documentId) editor.commands.updateUser(identity); }, [editor, identity, documentId]);
+  useEffect(() => { editor?.setEditable(role !== "viewer"); }, [editor, role]);
   useEffect(() => {
     if (!editor || !session?.awareness) return undefined;
     const onUpdate = () => {
@@ -59,7 +59,6 @@ export default function Editor({ documentId, session, identity, role = "editor" 
     return () => { editor.off("update", onUpdate); window.clearTimeout(typingTimer.current); };
   }, [editor, session?.awareness]);
 
-  if (documentId && !session?.ydoc) return <div className="collab-loading">Connecting and loading the latest CRDT state…</div>;
   if (!editor) return <div className="collab-loading">Preparing editor…</div>;
   return (
     <div className="rich-editor" style={{ "--editor-font-size": `${fontSize}px` }}>
