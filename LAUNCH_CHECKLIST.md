@@ -11,7 +11,14 @@
 - [ ] Test mobile, tablet, and desktop layouts.
 - [ ] Test light, dark, and system themes.
 - [ ] Test keyboard shortcuts and screen-reader labels.
-- [ ] Test two-user collaboration, reconnection, and restart recovery.
+- [ ] Create and join a Live session using its 6-digit code and QR link.
+- [ ] Test approval, rejection, editor/viewer changes, removal, and session termination.
+- [ ] Confirm a session code alone cannot authorize HTTP or WebSocket access.
+- [ ] Verify viewer Yjs update frames are rejected server-side.
+- [ ] Verify the sixth join attempt in one minute is throttled.
+- [ ] Test two-user and 10-user concurrent editing, cursors, typing presence, and reconnection.
+- [ ] Confirm Live contents do not survive restart unless `COLLAB_PERSIST_UPDATES=true` is intentionally enabled.
+- [ ] Confirm no API, QR payload, WebSocket URL, or log exposes a local filesystem path.
 
 ## Clerk
 

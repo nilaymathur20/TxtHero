@@ -18,7 +18,9 @@
 | `SITE_URL` | Public metadata | Sitemap/robots | Canonical deployment origin |
 | `TXTHERO_UPLOAD_DIR` | Server only | Next server/Electron | Private upload root |
 | `TXTHERO_USER_DATA_DIR` | Server only | Next server/Electron | Clerk metadata root |
-| `TXTHERO_STORAGE_DIR` | Server only | FastAPI/Electron | Local documents and CRDT snapshots |
+| `TXTHERO_STORAGE_DIR` | Server only | FastAPI/Electron | Local documents and optional CRDT snapshots |
+| `COLLAB_PERSIST_UPDATES` | Server only | FastAPI | Set to `true` to opt into Yjs disk snapshots; defaults to `false` |
+| `COLLAB_DIAGNOSTICS_TOKEN` | Server only | FastAPI | Enables and protects room diagnostic endpoints |
 | `TXTHERO_APP_URL` | Desktop process | Electron | Optional externally hosted frontend |
 | `HOST` | Server only | FastAPI/Next | Bind host |
 | `PORT` | Server only | FastAPI/Next | Bind port |

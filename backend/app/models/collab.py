@@ -45,10 +45,64 @@ class CollabStats(BaseModel):
 
 
 class LiveSession(BaseModel):
-    """A short-lived, high-entropy collaboration invitation."""
+    """A short-lived collaboration invitation and host credential."""
 
     session_id: str
+    session_uuid: str
+    token: str
+    participant_id: str
     expires_at: datetime
+    require_approval: bool
+    mode: Literal["1:1", "team"]
+    max_participants: int
+
+
+class CreateLiveSession(BaseModel):
+    host_id: str = Field(min_length=1, max_length=128)
+    display_name: str = Field(min_length=1, max_length=60)
+    color: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+    mode: Literal["1:1", "team"] = "team"
+    require_approval: bool = True
+    expires_in_minutes: int = Field(default=120, ge=15, le=480)
+    max_participants: int = Field(default=10, ge=2, le=15)
+
+
+class JoinLiveSession(BaseModel):
+    user_id: str = Field(min_length=1, max_length=128)
+    display_name: str = Field(min_length=1, max_length=60)
+    color: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+
+
+class JoinResult(BaseModel):
+    request_id: str
+    status: Literal["pending", "approved", "rejected"]
+    token: str | None = None
+    participant_id: str | None = None
+    expires_at: datetime
+
+
+class ParticipantView(BaseModel):
+    participant_id: str
+    display_name: str
+    color: str
+    role: Literal["host", "editor", "viewer"]
+    status: Literal["pending", "online", "offline", "removed"]
+    request_id: str | None = None
+
+
+class SessionView(BaseModel):
+    session_id: str
+    session_uuid: str
+    mode: Literal["1:1", "team"]
+    require_approval: bool
+    expires_at: datetime
+    max_participants: int
+    status: Literal["open", "closed", "expired"]
+    participants: list[ParticipantView]
+
+
+class RoleUpdate(BaseModel):
+    role: Literal["editor", "viewer"]
 
 
 # Compatibility aliases for the first collaboration API version.

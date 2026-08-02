@@ -7,7 +7,7 @@ import { API_URL } from "../lib/api";
 
 const WS_URL = (process.env.NEXT_PUBLIC_WS_URL || API_URL.replace(/^http/, "ws")).replace(/\/$/, "");
 
-export function useCollab(documentId, identity) {
+export function useCollab(documentId, identity, token) {
   const [session, setSession] = useState(null);
   const [users, setUsers] = useState([]);
   const [status, setStatus] = useState("connecting");
@@ -18,11 +18,11 @@ export function useCollab(documentId, identity) {
   const knownUsers = useRef(new Map());
 
   useEffect(() => {
-    if (!identity || !documentId) return undefined;
+    if (!identity || !documentId || !token) return undefined;
 
     const ydoc = new Y.Doc();
     const provider = new WebsocketProvider(`${WS_URL}/ws`, documentId, ydoc, {
-      params: { user_id: identity.id },
+      params: { user_id: identity.id, token },
       maxBackoffTime: 5000,
     });
     provider.awareness.setLocalStateField("user", identity);
@@ -32,7 +32,7 @@ export function useCollab(documentId, identity) {
       const next = [];
       provider.awareness.getStates().forEach((state, clientId) => {
         if (!state.user) return;
-        const user = { ...state.user, clientId };
+        const user = { ...state.user, status: state.activity?.status || "online", clientId };
         next.push(user);
         knownUsers.current.set(clientId, user);
       });
@@ -72,7 +72,7 @@ export function useCollab(documentId, identity) {
       setUsers([]);
       setSynced(false);
     };
-  }, [documentId, identity?.id]);
+  }, [documentId, identity?.id, token]);
 
   useEffect(() => {
     if (session?.provider && identity) {

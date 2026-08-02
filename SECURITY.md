@@ -33,9 +33,24 @@ The requested custom Redis thresholds conflict internally (“return 429 beyond 
 - Contact JSON is parsed and validated by Zod before mail logic.
 - Preferences accept only explicitly enumerated keys and values.
 - Upload size, filename, and actual magic bytes are checked server-side.
-- Collaboration room IDs are validated by FastAPI.
+- Collaboration discovery codes and participant credentials are validated by FastAPI before WebSocket acceptance.
 - Clerk webhook signatures are verified before user metadata changes.
 - Rejections return generic errors; rule detail is logged server-side without request bodies.
+
+## Live collaboration security
+
+- A 6-digit code is discovery data, not authorization. Each participant uses an independent 256-bit random bearer credential.
+- Host credentials can approve or reject guests, change editor/viewer roles, revoke participants, and end the session.
+- Viewer document-update frames are rejected by the WebSocket adapter; toolbar hiding is not treated as enforcement.
+- Join requests are throttled to five attempts per client address per minute.
+- Sessions expire after 15 minutes to 8 hours, support at most 15 participants, and remain in process memory.
+- CRDT contents are ephemeral unless `COLLAB_PERSIST_UPDATES=true` is explicitly configured.
+- Awareness data—names, colors, cursors, selections, and typing activity—is never persisted.
+- Diagnostic room listings are unavailable unless `COLLAB_DIAGNOSTICS_TOKEN` is configured and supplied.
+- Collaboration exposes no filesystem paths, directory listings, file handles, arbitrary file APIs, shell, or desktop control.
+- Production deployments must terminate HTTPS/WSS at the application or trusted reverse proxy.
+
+The relay currently decrypts Yjs updates after TLS termination and is therefore a trusted relay, not an end-to-end encrypted relay. Do not describe Live as E2E encrypted until a reviewed client-side key exchange and payload-encryption design is implemented.
 
 ## Metadata record
 

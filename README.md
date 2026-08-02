@@ -5,7 +5,7 @@ TxtHero is a focused writing workspace built with Next.js, FastAPI, and Electron
 TxtHero now has two complementary editing modes:
 
 - **Solo** at `/`: the original lightweight textarea and REST-backed local files.
-- **TxtHero Live** at `/collab/?room=<document-id>`: TipTap rich text, Yjs conflict-free collaboration, guest presence, live cursors/selections, syntax-highlighted code blocks, lazy fonts, reconnection, and five-second durable snapshots.
+- **TxtHero Live** at `/collab`: privacy-scoped Yjs collaboration with 6-digit session codes, separate participant credentials, host approval, editor/viewer roles, live cursors, typing presence, QR invitations, and reconnection.
 
 ## Quick Navigation
 
@@ -103,7 +103,7 @@ npm run dev:web
 ```
 
 - Solo editor: `http://localhost:3000/`
-- Collaborative editor: `http://localhost:3000/collab/?room=demo`
+- Collaborative editor: `http://localhost:3000/collab`
 - API docs: `http://127.0.0.1:8000/docs`
 
 ---
@@ -175,7 +175,7 @@ Development services:
 To test real-time collaboration with multiple users, open this URL in two separate browser profiles:
 
 ```
-http://localhost:3000/collab/?room=demo
+http://localhost:3000/collab
 ```
 
 Each browser profile creates a separate guest identity. Tabs in the same profile intentionally share identity.
@@ -511,7 +511,7 @@ health checks, opens the application, and shuts both child processes down when
 the final window closes. Users do not install Python, Node.js, or project
 dependencies.
 
-Desktop documents, collaboration snapshots, uploads, logs, and account metadata
+Desktop documents, optional collaboration snapshots, uploads, logs, and account metadata
 are written under Electron's per-user application-data directory rather than
 inside `/opt/TxtHero`.
 
@@ -663,9 +663,11 @@ Each record includes:
 
 ### Collaboration Diagnostics
 
+Diagnostics are disabled by default. Set `COLLAB_DIAGNOSTICS_TOKEN` and send it as `Authorization: Bearer <token>` to enable these operational endpoints. Normal participants do not need or receive this token.
+
 #### `GET /collab/rooms`
 
-Returns room counts, user counts, and metadata for all active collaboration rooms.
+Returns room counts, user counts, and metadata for all active collaboration rooms to an authorized operator.
 
 #### `GET /collab/rooms/{document_id}`
 
@@ -673,7 +675,7 @@ Returns metadata for a single room or 404 if not found. Exposes presence only—
 
 #### `GET /collaboration/{document_id}/users`
 
-Preserves the original active-user response shape. Lists users currently editing in a collaboration room.
+Preserves the original active-user response shape. It requires a valid participant credential for that session.
 
 ---
 
@@ -681,35 +683,35 @@ Preserves the original active-user response shape. Lists users currently editing
 
 ### Overview
 
-TxtHero Live is an optional CRDT editor at `/collab/?room=<document-id>`. The original `/` editor and every existing REST endpoint continue to work unchanged. The collaborative editor also supports rich formatting, lazily loaded fonts, and syntax-highlighted code blocks.
+TxtHero Live is an optional, document-scoped CRDT editor at `/collab`. The original `/` editor remains independent. A host creates an ephemeral session and shares its 6-digit discovery code or QR link. The code is never an access credential: every approved participant receives a separate random token scoped to that session.
 
 The collaborative mode uses Yjs (a CRDT library) to achieve:
 - Conflict-free concurrent editing
 - Automatic synchronization without last-write-wins
-- Persistent snapshots saved every 5 seconds
+- Ephemeral document contents by default; optional snapshots only when explicitly enabled
 - Real-time presence (cursor positions, user names, colors)
+- Typing activity and editor/viewer roles
 - Reconnection support with exponential backoff
 
 ### Architecture
 
 ```text
- Browser / Electron A              FastAPI :8000           Browser / Electron B
+ Host / Editor                     FastAPI :8000              Guest / Viewer
  ┌─────────────────────┐     binary WS      ┌──────────────────────────────┐      ┌─────────────────────┐
  │ TipTap / ProseMirror│◄──────────────────►│ /ws/{document_id}            │◄────►│ TipTap / ProseMirror│
  │ CollaborationCaret  │                    │ ConnectionManager            │      │ CollaborationCaret  │
+ │ scoped bearer token │                    │ session authorization        │      │ scoped bearer token │
  │ Y.Doc + awareness   │                    │ YRoom + server-side Y.Doc    │      │ Y.Doc + awareness   │
  └─────────────────────┘                    └──────────────┬───────────────┘      └─────────────────────┘
-                                                         │ atomic full-state snapshot
-                                                         ▼ every 5 seconds / last leave
-                                             backend/documents/.collaboration/
-                                                        <room>.yjs
+                                                         │ optional snapshots only when
+                                                         ▼ COLLAB_PERSIST_UPDATES=true
 ```
 
 TipTap stores its ProseMirror document in a Yjs XML fragment. Local transactions produce compact binary Yjs updates. `y-websocket` exchanges state vectors and only the missing updates with the FastAPI room. Updates are commutative and idempotent, so simultaneous edits converge without data loss. The separate Yjs awareness channel carries guest identity, caret, and selection; awareness is intentionally not persisted.
 
 ### WebSocket Endpoint
 
-#### `WebSocket /ws/{document_id}`
+#### `WebSocket /ws/{session_code}?token=<participant-token>`
 
 This endpoint speaks the binary y-websocket sync and awareness protocol. Connect through `WebsocketProvider`; a raw JSON WebSocket client is not compatible.
 
@@ -719,43 +721,67 @@ import { WebsocketProvider } from 'y-websocket'
 
 const doc = new Y.Doc()
 const provider = new WebsocketProvider(
-  'ws://127.0.0.1:8000',
-  'demo', // document_id / room name
-  doc
+  'ws://127.0.0.1:8000/ws',
+  '482913',
+  doc,
+  { params: { token: participantToken } }
 )
 ```
 
-**Room ID constraints:**
+**Session code constraints:**
 
-- Accepted characters: letters, digits, `_`, `-`
-- Maximum length: 128 characters
-- Invalid IDs close the connection with policy code `1008`
+- Exactly six numeric digits
+- Cryptographically generated with collision checks among active sessions
+- Valid only until the session expires or the host ends it
+- Never sufficient without a scoped participant token
+- Invalid or revoked credentials close the socket with policy code `1008`
+
+Viewers may receive Yjs synchronization and awareness frames, but document-update frames from viewers are discarded at the WebSocket boundary. Hiding the toolbar is only a secondary UI safeguard.
+
+### Session Lifecycle API
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /collab/sessions` | Create a session and issue the host credential |
+| `POST /collab/sessions/{code}/join` | Submit a guest request or join immediately when approval is disabled |
+| `GET /collab/join-requests/{request_id}` | Poll a high-entropy pending request for approval/rejection |
+| `GET /collab/sessions/{code}` | Read authorized session and participant state |
+| `POST /collab/sessions/{code}/requests/{request_id}/{approve|reject}` | Host approval decision |
+| `PATCH /collab/sessions/{code}/participants/{participant_id}` | Change editor/viewer role |
+| `DELETE /collab/sessions/{code}/participants/{participant_id}` | Remove a participant and revoke access |
+| `DELETE /collab/sessions/{code}` | End the session |
+
+Authorized HTTP calls use `Authorization: Bearer <participant-token>`. The join endpoint is limited to five attempts per client address per minute. A session supports 2–15 participants; team sessions default to 10.
 
 ### Guest Identity & Presence
 
-On first use, the frontend creates a random UUID, display name, and deterministic palette color in localStorage under `txthero-guest`. "Change my name" updates that identity. Presence, remote selections, and labeled carets are distributed through Yjs awareness. The read-only endpoint is ready for later authorization middleware:
+On first use, the frontend creates a random UUID, display name, and palette color in localStorage under `txthero-guest`. Presence, remote selections, labeled carets, and typing activity are distributed through Yjs Awareness and are not persisted. The presence endpoint requires a valid session credential:
 
 ```http
 GET /collaboration/{document_id}/users
 ```
 
+The `/collab/rooms` diagnostic endpoints are disabled unless `COLLAB_DIAGNOSTICS_TOKEN` is configured, then require that token as a bearer credential.
+
 ### Testing Collaboration with Multiple Users
 
-1. Open `http://localhost:3000/collab/?room=two-user-test` in two browsers or one normal and one private window. Separate browser profiles produce separate guest identities; tabs in the same profile intentionally share identity.
+1. Open `http://localhost:3000/collab` in two browsers or one normal and one private window.
 
-2. Type simultaneously near the same paragraph. Both windows should converge and show colored selections/carets.
+2. In the first profile, create a session and leave **Require host approval** enabled. In the second, enter the displayed 6-digit code.
 
-3. Confirm both users appear under "Online" and that join/leave toasts appear.
+3. Approve the pending guest. Confirm the second profile connects and both users appear in the participant sidebar.
 
-4. Wait at least five seconds and check `backend/documents/.collaboration/two-user-test.yjs` (or the Docker volume). Close the last client to exercise the immediate-save path.
+4. Type simultaneously near the same paragraph. Both windows should converge and show colored selections/carets and typing state.
 
-5. Reload both windows; the latest CRDT state should return with full document history intact.
+5. Change the guest to **Viewer** and verify their formatting toolbar disappears and their update frames are rejected. Restore **Editor**, then remove the guest and confirm their credential no longer works.
+
+6. End the session and verify both clients return to the lobby. By default, creating a new session starts with an empty ephemeral document.
 
 ### Reconnection Testing
 
 In browser DevTools:
 
-1. Open Network, select the `/ws/two-user-test` request
+1. Open Network and select the `/ws/<six-digit-code>` request
 2. Switch Network throttling preset to Offline
 3. The indicator changes to Disconnected/Reconnecting
 4. Continue editing locally; changes queue
@@ -776,21 +802,21 @@ Frames are binary (Yjs sync or awareness protocol). Initial exchange is sync ste
 ### Room Lifecycle
 
 ```text
-first connection → validate ID → load .yjs snapshot → start YRoom
+create session    → issue code + host credential → bind one logical document
+join request      → pending approval → issue participant-scoped credential
+first connection → authorize token → start ephemeral YRoom
 connection       → sync state vector → exchange missing updates
-document update  → mark revision dirty
-every 5 seconds  → atomically replace full-state snapshot
-last disconnect  → immediate snapshot
-shutdown         → save every room → stop persistence/server tasks
+viewer update    → reject at WebSocket adapter
+remove/end/expiry→ revoke authorization and disconnect through client polling
 ```
 
-A revision counter prevents an edit arriving during a disk write from accidentally clearing the dirty marker.
+Set `COLLAB_PERSIST_UPDATES=true` only when restart recovery is explicitly required. When enabled, atomic Yjs snapshots use the existing `.collaboration` directory. Awareness, cursor, and typing state remain ephemeral.
 
 ### Scaling Notes
 
-- Rooms are process-local and disk snapshots are local
+- Sessions, credentials, throttling counters, and rooms are process-local
 - Use one Uvicorn worker for this design
-- Horizontal scaling requires sticky routing plus shared Yjs pub/sub and persistence layer
+- Horizontal scaling requires a TTL session store, shared rate limiter, sticky routing, and shared Yjs pub/sub
 
 ### Migrating from Solo to Collaborative
 
@@ -809,10 +835,13 @@ if (yDoc.isEmpty()) {
 }
 ```
 
-For authentication later:
-1. Validate a token from WebSocket query string or cookies before `websocket.accept()`
-2. Enforce same authorization in `GET /collaboration/{document_id}/users`
-3. Map authenticated subject to awareness identity server-side
+### Privacy Boundary
+
+- Only the current collaborative Yjs document is shared.
+- Session payloads contain opaque IDs, display metadata, roles, and expiration—not filesystem paths.
+- Guests receive no directory listing, file handle, upload endpoint, shell, or arbitrary read/write API.
+- The relay is currently a trusted TLS endpoint; payloads are not end-to-end encrypted from the relay.
+- Filesystem/project sharing, camera QR scanning, durable Alt+Hover attribution, and E2E encryption remain separate future phases.
 
 ---
 
@@ -839,12 +868,12 @@ Only these grammars are imported in `frontend/src/lib/lowlight.js`, keeping the 
 
 ### Testing Code Blocks
 
-1. Open `/collab/?room=code-test` in two browser profiles
+1. Create a Live session and join it from a second browser profile
 2. Insert a Python block and paste `print("hello")`
 3. Confirm both windows show the same block and highlighting
 4. Change the language in one window and confirm it changes in the other
 5. Put both carets on the same line and type simultaneously; both edits must remain
-6. Reload after five seconds and confirm the block returns
+6. Confirm the block remains synchronized while the session is active
 
 ---
 
@@ -935,7 +964,8 @@ The browser formatter does not upload local files. The authenticated `/api/files
 │             │                         │                     │
 └─────────────┼─────────────────────────┼─────────────────────┘
               ▼                         ▼
- backend/documents/*        .collaboration/<room>.yjs
+ backend/documents/*        ephemeral YRoom by default
+                            optional .collaboration/<code>.yjs
 ```
 
 ### Yjs Update Flow
@@ -1003,7 +1033,7 @@ TxtHero validates inputs it owns:
 
 - **Contact form**: Zod validation, normalized email, maximum lengths, generic failures, rejection security log
 - **Upload**: authenticated user, 50 MB maximum, basename/path rejection, actual magic-byte allowlist, private mode `0600` storage
-- **Collaboration room IDs**: server-side allowlist and length constraints
+- **Live collaboration**: six-digit discovery-code validation, independent participant credentials, host authorization, role enforcement, revocation, expiration, and join throttling
 
 Protected routes are declared in `frontend/proxy.js`. The webhook uses Clerk `verifyWebhook()` before writes. Local user metadata contains only `clerkUserId`, plan, preferences, timestamps, and a deletion marker.
 
@@ -1191,12 +1221,9 @@ export NEXT_PUBLIC_WS_URL=wss://your-domain.com
 npm run build
 ```
 
-**Room does not load after restart**
+**A Live document does not load after restart**
 
-Ensure:
-1. `backend/documents/` or Docker volume is writable
-2. Volume is persistent (not deleted by `docker compose down`)
-3. `.collaboration/` subdirectory exists with proper permissions
+This is the default privacy behavior: Live contents are scoped to the active server session. If restart recovery is an explicit product requirement, set `COLLAB_PERSIST_UPDATES=true`, ensure `TXTHERO_STORAGE_DIR` is writable and persistent, and disclose the retention behavior to users.
 
 **Google Font unavailable**
 
@@ -1266,8 +1293,9 @@ Complete these items before production launch:
 - [ ] Confirm fidelity warnings are acceptable for office/PDF documents
 - [ ] Test downloads in Chrome, Firefox, Safari, Edge, and Electron
 - [ ] Test mobile/tablet layout and both light/dark themes
-- [ ] Test two-user Yjs collaboration end-to-end
-- [ ] Confirm document restart recovery (stop/restart backend)
+- [ ] Test two-user Yjs collaboration, approval, roles, removal, termination, and reconnection end-to-end
+- [ ] Confirm documents are ephemeral after restart by default
+- [ ] If persistence is enabled, confirm restart recovery and retention disclosure
 
 ### Clerk Authentication
 
@@ -1363,7 +1391,7 @@ In Docker, documents are persisted in the named volume `txthero_txthero-document
 docker volume inspect txthero_txthero-documents
 ```
 
-For collaboration rooms, CRDT snapshots are stored in `backend/documents/.collaboration/` as `.yjs` binary files.
+Live CRDT content is memory-only by default. When `COLLAB_PERSIST_UPDATES=true`, snapshots are stored under `TXTHERO_STORAGE_DIR/.collaboration/` as `.yjs` binary files. Session credentials and awareness state are never written to those snapshots.
 
 ---
 

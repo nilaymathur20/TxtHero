@@ -12,7 +12,7 @@ import { TextStyle } from "@tiptap/extension-text-style";
 import Underline from "@tiptap/extension-underline";
 import StarterKit from "@tiptap/starter-kit";
 import { EditorContent, ReactNodeViewRenderer, useEditor } from "@tiptap/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import CodeBlock from "./CodeBlock";
 import StatusBar from "./StatusBar";
 import Toolbar from "./Toolbar";
@@ -28,8 +28,9 @@ const CollaborativeCodeBlock = CodeBlockLowlight.extend({
   },
 }).configure({ lowlight, defaultLanguage: "plaintext", enableTabIndentation: false });
 
-export default function Editor({ documentId, session, identity }) {
+export default function Editor({ documentId, session, identity, role = "editor" }) {
   const [fontSize, setFontSize] = useState(16);
+  const typingTimer = useRef(null);
   const extensions = useMemo(() => {
     const base = [
       StarterKit.configure({ codeBlock: false, undoRedo: documentId ? false : {} }),
@@ -45,14 +46,25 @@ export default function Editor({ documentId, session, identity }) {
     return base;
   }, [documentId, session?.ydoc, session?.provider, identity?.id]);
 
-  const editor = useEditor({ immediatelyRender: false, extensions, editorProps: { attributes: { class: "collab-tiptap" } } }, [extensions]);
+  const editor = useEditor({ immediatelyRender: false, extensions, editable: role !== "viewer", editorProps: { attributes: { class: "collab-tiptap" } } }, [extensions, role]);
   useEffect(() => { if (editor && identity && documentId) editor.commands.updateUser(identity); }, [editor, identity, documentId]);
+  useEffect(() => {
+    if (!editor || !session?.awareness) return undefined;
+    const onUpdate = () => {
+      session.awareness.setLocalStateField("activity", { status: "typing" });
+      window.clearTimeout(typingTimer.current);
+      typingTimer.current = window.setTimeout(() => session.awareness.setLocalStateField("activity", { status: "online" }), 1200);
+    };
+    editor.on("update", onUpdate);
+    return () => { editor.off("update", onUpdate); window.clearTimeout(typingTimer.current); };
+  }, [editor, session?.awareness]);
 
   if (documentId && !session?.ydoc) return <div className="collab-loading">Connecting and loading the latest CRDT state…</div>;
   if (!editor) return <div className="collab-loading">Preparing editor…</div>;
   return (
     <div className="rich-editor" style={{ "--editor-font-size": `${fontSize}px` }}>
-      <Toolbar editor={editor} fontSize={fontSize} onFontSize={setFontSize} />
+      {role !== "viewer" && <Toolbar editor={editor} fontSize={fontSize} onFontSize={setFontSize} />}
+      {role === "viewer" && <div className="collab-viewer-banner">View only · the host can grant editing access</div>}
       <div className="collab-paper"><EditorContent editor={editor} /></div>
       <StatusBar editor={editor} />
     </div>

@@ -25,7 +25,7 @@ export default function ShareButton({ documentId }) {
     {open && url && <div className="live-share-card">
       <QRCodeSVG value={url} size={176} level="M" />
       <strong>{documentId.match(/.{1,3}/g)?.join(" ")}</strong>
-      <small>Random one-hour session</small>
+      <small>Short-lived, permission-controlled session</small>
       <button onClick={share}>Copy join link</button>
     </div>}
   </div>;
