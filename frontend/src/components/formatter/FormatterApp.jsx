@@ -22,6 +22,7 @@ export default function FormatterApp() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [options, setOptions] = useState(defaultOptions);
   const current = files[selected];
+  const hasUnsavedChanges = files.some((item) => item.dirty === true);
 
   useEffect(() => {
     try {
@@ -30,6 +31,11 @@ export default function FormatterApp() {
       setOptions(defaultOptions);
     }
   }, []);
+
+  useEffect(() => {
+    window.txthero?.setUnsavedChanges?.(hasUnsavedChanges);
+    return () => window.txthero?.setUnsavedChanges?.(false);
+  }, [hasUnsavedChanges]);
 
   const updateOptions = (next) => {
     setOptions(next);
@@ -73,7 +79,7 @@ export default function FormatterApp() {
     setProcessing(true);
     try {
       const formatted = await formatSource(current.source, current.descriptor.parser, options);
-      setFiles((items) => items.map((item, index) => index === selected ? { ...item, formatted } : item));
+      setFiles((items) => items.map((item, index) => index === selected ? { ...item, formatted, dirty: true } : item));
       toast.success("Formatted");
     } catch {
       toast.error("Formatting failed; check the source syntax");
@@ -93,6 +99,7 @@ export default function FormatterApp() {
       link.href = url;
       link.download = current.file.name;
       link.click();
+      setFiles((items) => items.map((item, index) => index === selected ? { ...item, dirty: false } : item));
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       toast.success("Download prepared");
     } catch {
@@ -120,8 +127,8 @@ export default function FormatterApp() {
             <>
               {current.model?.warning && <div className="fidelity-warning">{current.model.warning}</div>}
               {current.descriptor.editor === "code"
-                ? <CodeFileEditor source={current.source} formatted={current.formatted} language={current.descriptor.parser} onChange={(source) => setFiles((items) => items.map((item, index) => index === selected ? { ...item, source } : item))} />
-                : <DocumentEditor model={current.model} onChange={(model) => setFiles((items) => items.map((item, index) => index === selected ? { ...item, model } : item))} />}
+                ? <CodeFileEditor source={current.source} formatted={current.formatted} language={current.descriptor.parser} onChange={(source) => setFiles((items) => items.map((item, index) => index === selected ? { ...item, source, dirty: true } : item))} />
+                : <DocumentEditor model={current.model} onChange={(model) => setFiles((items) => items.map((item, index) => index === selected ? { ...item, model, dirty: true } : item))} />}
             </>
           )}
         </div>

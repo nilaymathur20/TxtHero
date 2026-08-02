@@ -13,6 +13,7 @@ TxtHero now has two complementary editing modes:
 - [Development](#development)
 - [Docker Deployment](#docker-deployment)
 - [Desktop Packages](#desktop-packages)
+- [GitHub Releases & Automatic Updates](GITHUB_UPDATES.md)
 - [REST API Reference](#rest-api-reference)
 - [WebSocket Collaboration](#websocket-collaboration)
 - [Live Collaboration Checklist](LIVE_COLLABORATION_CHECKLIST.md)

@@ -22,6 +22,7 @@
 | `COLLAB_PERSIST_UPDATES` | Server only | FastAPI | Set to `true` to opt into Yjs disk snapshots; defaults to `false` |
 | `COLLAB_DIAGNOSTICS_TOKEN` | Server only | FastAPI | Enables and protects room diagnostic endpoints |
 | `TXTHERO_APP_URL` | Desktop process | Electron | Optional externally hosted frontend |
+| `TXTHERO_DISABLE_AUTO_UPDATE` | Desktop process | Electron | Set to `1` to disable background GitHub Release checks |
 | `HOST` | Server only | FastAPI/Next | Bind host |
 | `PORT` | Server only | FastAPI/Next | Bind port |
 | `ENV` | Server only | FastAPI | Runtime environment |

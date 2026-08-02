@@ -1,4 +1,5 @@
-const { app, BrowserWindow, dialog, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -12,6 +13,19 @@ let backendLog;
 let frontendLog;
 let mainWindow;
 let isQuitting = false;
+let hasUnsavedChanges = false;
+let updateDownloaded = false;
+let manualUpdateCheck = false;
+
+function readBuildInfo() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(__dirname, "build-info.json"), "utf8"));
+  } catch {
+    return { commit: "unknown", branch: "unknown", builtAt: null, release: null };
+  }
+}
+
+const buildInfo = readBuildInfo();
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
@@ -158,6 +172,131 @@ function createWindow() {
   });
 }
 
+function versionSummary() {
+  return [
+    `Version: ${app.getVersion()}`,
+    `Commit: ${buildInfo.commit}`,
+    `Branch: ${buildInfo.branch}`,
+    `Built: ${buildInfo.builtAt || "local development"}`,
+  ].join("\n");
+}
+
+async function installDownloadedUpdate() {
+  if (!updateDownloaded) {
+    await dialog.showMessageBox(mainWindow, {
+      type: "info",
+      title: "No downloaded update",
+      message: "Check for updates first. An update can be installed after its download completes.",
+    });
+    return false;
+  }
+  if (hasUnsavedChanges) {
+    await dialog.showMessageBox(mainWindow, {
+      type: "warning",
+      title: "Save before updating",
+      message: "TxtHero has unsaved editor changes.",
+      detail: "Save your work, then choose Help → Install Downloaded Update. The update will never restart TxtHero while unsaved changes are reported.",
+    });
+    return false;
+  }
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: "question",
+    title: "Install TxtHero update",
+    message: "The update is ready to install.",
+    detail: "TxtHero will close and restart with the new GitHub release.",
+    buttons: ["Install and Restart", "Later"],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true,
+  });
+  if (response !== 0) return false;
+  isQuitting = true;
+  autoUpdater.quitAndInstall(false, true);
+  return true;
+}
+
+async function checkForUpdates(manual = false) {
+  if (isDevelopment || !app.isPackaged) {
+    if (manual) await dialog.showMessageBox(mainWindow, { type: "info", title: "Development build", message: "Automatic updates are available in packaged TxtHero releases." });
+    return { supported: false };
+  }
+  manualUpdateCheck = manual;
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    return { supported: true, version: result?.updateInfo?.version || null };
+  } catch (error) {
+    manualUpdateCheck = false;
+    if (manual) await dialog.showMessageBox(mainWindow, { type: "error", title: "Update check failed", message: "TxtHero could not check GitHub Releases.", detail: error.message });
+    return { supported: true, error: "update_check_failed" };
+  }
+}
+
+function configureUpdates() {
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
+  autoUpdater.allowPrerelease = false;
+
+  autoUpdater.on("update-available", async (info) => {
+    manualUpdateCheck = false;
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: "info",
+      title: "TxtHero update available",
+      message: `Version ${info.version} is available from GitHub Releases.`,
+      detail: "Download it now? TxtHero will not restart until you explicitly install it, and unsaved work blocks installation.",
+      buttons: ["Download", "Later"],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    });
+    if (response === 0) {
+      try {
+        await autoUpdater.downloadUpdate();
+      } catch (error) {
+        await dialog.showMessageBox(mainWindow, {
+          type: "error",
+          title: "Update download failed",
+          message: "TxtHero could not download the GitHub release.",
+          detail: error.message,
+        });
+      }
+    }
+  });
+  autoUpdater.on("update-not-available", async () => {
+    if (!manualUpdateCheck) return;
+    manualUpdateCheck = false;
+    await dialog.showMessageBox(mainWindow, { type: "info", title: "TxtHero is up to date", message: `Version ${app.getVersion()} is the newest published release.` });
+  });
+  autoUpdater.on("update-downloaded", async () => {
+    updateDownloaded = true;
+    await installDownloadedUpdate();
+  });
+  autoUpdater.on("error", async (error) => {
+    if (!manualUpdateCheck) return;
+    manualUpdateCheck = false;
+    await dialog.showMessageBox(mainWindow, { type: "error", title: "Update failed", message: "TxtHero could not complete the GitHub update request.", detail: error.message });
+  });
+}
+
+function configureApplicationMenu() {
+  const template = [
+    { label: "File", submenu: [{ role: "quit" }] },
+    { label: "Edit", submenu: [{ role: "undo" }, { role: "redo" }, { type: "separator" }, { role: "cut" }, { role: "copy" }, { role: "paste" }, { role: "selectAll" }] },
+    { label: "View", submenu: [{ role: "reload" }, { role: "forceReload" }, { type: "separator" }, { role: "resetZoom" }, { role: "zoomIn" }, { role: "zoomOut" }, { type: "separator" }, { role: "togglefullscreen" }] },
+    { label: "Help", submenu: [
+      { label: "Check for Updates…", click: () => checkForUpdates(true) },
+      { label: "Install Downloaded Update…", click: () => installDownloadedUpdate() },
+      { type: "separator" },
+      { label: "About TxtHero", click: () => dialog.showMessageBox(mainWindow, { type: "info", title: "About TxtHero", message: "TxtHero", detail: versionSummary() }) },
+    ] },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+ipcMain.handle("txthero:version", () => ({ version: app.getVersion(), ...buildInfo }));
+ipcMain.handle("txthero:check-for-updates", () => checkForUpdates(true));
+ipcMain.handle("txthero:install-update", () => installDownloadedUpdate());
+ipcMain.on("txthero:unsaved-changes", (_event, dirty) => { hasUnsavedChanges = dirty === true; });
+
 if (hasSingleInstanceLock) app.whenReady().then(async () => {
   try {
     if (!isDevelopment) {
@@ -168,6 +307,15 @@ if (hasSingleInstanceLock) app.whenReady().then(async () => {
     }
 
     createWindow();
+    configureApplicationMenu();
+    if (!isDevelopment && app.isPackaged) {
+      configureUpdates();
+      if (process.env.TXTHERO_DISABLE_AUTO_UPDATE !== "1") {
+        setTimeout(() => checkForUpdates(false), 10_000);
+        const timer = setInterval(() => checkForUpdates(false), 4 * 60 * 60 * 1000);
+        timer.unref();
+      }
+    }
   } catch (error) {
     dialog.showErrorBox(
       "TxtHero could not start",

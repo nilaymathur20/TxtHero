@@ -13,7 +13,7 @@
     "build": "npm --prefix frontend run build",
     "build:backend:linux": "backend/venv/bin/python -m PyInstaller --clean --noconfirm --distpath backend/dist --workpath backend/build backend/txthero-backend.spec",
     "start": "npm --prefix frontend run start",
-    "dist:linux": "npm run build && npm run build:backend:linux && electron-builder --linux deb",
+    "dist:linux": "npm run build && npm run build:backend:linux && electron-builder --linux",
     "dist:windows": "npm run build && electron-builder --win nsis",
     "dist:mac": "npm run build && electron-builder --mac dmg",
     "dist:all": "npm run build && electron-builder --linux deb --win nsis --mac dmg"
@@ -67,6 +67,11 @@
         "to": "backend/txthero-backend"
       }
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "nilaymathur20",
+      "repo": "TxtHero"
+    },
     "linux": {
       "target": [
         "deb",
@@ -85,5 +90,8 @@
       "target": "dmg",
       "category": "public.app-category.productivity"
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }

@@ -46,6 +46,11 @@ export default function SoloWorkspace() {
     return () => window.clearTimeout(saveTimer.current);
   }, [content, dirty]);
 
+  useEffect(() => {
+    window.txthero?.setUnsavedChanges?.(dirty);
+    return () => window.txthero?.setUnsavedChanges?.(false);
+  }, [dirty]);
+
   const save = async () => {
     try {
       const { data } = await api.post("/files/save", { filename: filename.trim() || "Untitled", content });
