@@ -1,0 +1,59 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: dockerfile
+      target: production
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - txthero-documents:/app/documents
+    environment:
+      ENV: production
+      HOST: 0.0.0.0
+      PORT: 8000
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
+      TXTHERO_STORAGE_DIR: /app/documents
+    networks:
+      - txthero-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+        NEXT_PUBLIC_WS_URL: ws://localhost:8000
+
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:8000}
+      WEBSOCKET_URL: ws://backend:8000
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      TXTHERO_USER_DATA_DIR: /app/storage
+      TXTHERO_UPLOAD_DIR: /app/storage/uploads
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+      SUPPORT_FROM_EMAIL: ${SUPPORT_FROM_EMAIL:-}
+      SMTP_URL: ${SMTP_URL:-}
+    volumes:
+      - txthero-frontend-data:/app/storage
+    networks:
+      - txthero-network
+
+volumes:
+  txthero-documents:
+  txthero-frontend-data:
+
+networks:
+  txthero-network:

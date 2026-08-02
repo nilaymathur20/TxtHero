@@ -1,0 +1,46 @@
+# syntax=docker/dockerfile:1
+
+FROM node:20-alpine AS base
+WORKDIR /app
+RUN apk add --no-cache libc6-compat
+
+FROM base AS dependencies
+COPY package.json package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci
+
+# Used by docker-compose.dev.yml. The source tree is bind-mounted at runtime;
+# keeping dependencies in the image makes startup deterministic and fast.
+FROM dependencies AS development
+ENV NODE_ENV=development
+EXPOSE 3000
+CMD ["npm", "run", "dev", "--", "--hostname", "0.0.0.0"]
+
+FROM dependencies AS builder
+COPY . .
+ARG NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+ARG NEXT_PUBLIC_WS_URL=ws://127.0.0.1:8000
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
+    NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL} \
+    NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    HOSTNAME=0.0.0.0 \
+    PORT=3000
+
+RUN apk add --no-cache libc6-compat \
+    && mkdir -p /app/storage \
+    && chown node:node /app/storage
+
+COPY --from=builder --chown=node:node /app/public ./public
+COPY --from=builder --chown=node:node /app/.next/standalone ./
+COPY --from=builder --chown=node:node /app/.next/static ./.next/static
+
+USER node
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD wget --spider -q http://127.0.0.1:3000/ || exit 1
+CMD ["node", "server.js"]

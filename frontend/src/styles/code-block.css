@@ -1,0 +1,10 @@
+/* VS Code-inspired code blocks and Highlight.js token colors. */
+.tx-code-block { margin:1.4rem 0; overflow:hidden; border:1px solid #343b4a; border-radius:9px; background:#1e222a; color:#abb2bf; font-family:"Fira Code","JetBrains Mono",Consolas,monospace; }
+.tx-code-header { display:flex; align-items:center; justify-content:space-between; padding:7px 10px; border-bottom:1px solid #343b4a; background:#282c34; }
+.tx-code-header select,.tx-code-header button { border:0; background:transparent; color:#abb2bf; font:12px system-ui,sans-serif; }
+.tx-code-header button { display:flex; align-items:center; gap:5px; cursor:pointer; }
+.tx-code-body { display:flex; min-height:50px; overflow:auto; }.tx-code-body pre { flex:1; min-width:0; margin:0; padding:14px 16px; background:transparent; white-space:pre; }
+.tx-code-body code { display:block; min-height:1.5em; outline:0; font-size:13px; line-height:1.65; }
+.tx-line-numbers { width:42px; flex:none; padding:14px 9px; border-right:1px solid #343b4a; color:#636d83; text-align:right; font:13px/1.65 "Fira Code",monospace; user-select:none; }
+.tx-line-numbers span { display:block; }
+.hljs-comment,.hljs-quote { color:#5c6370; font-style:italic; }.hljs-keyword,.hljs-selector-tag,.hljs-literal { color:#c678dd; }.hljs-string,.hljs-doctag,.hljs-regexp { color:#98c379; }.hljs-title,.hljs-section,.hljs-selector-id { color:#61afef; }.hljs-number,.hljs-symbol,.hljs-bullet { color:#d19a66; }.hljs-type,.hljs-built_in { color:#e5c07b; }.hljs-attribute,.hljs-name,.hljs-tag { color:#e06c75; }.hljs-variable,.hljs-template-variable { color:#e06c75; }.hljs-meta { color:#56b6c2; }

@@ -1,0 +1,10 @@
+.next
+node_modules
+out
+npm-debug.log*
+*.md
+.env*
+.git
+.gitignore
+coverage
+electron

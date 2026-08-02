@@ -1,0 +1,3 @@
+"use client";
+import { useEffect, useState } from "react";
+export default function CookieConsent() { const [show, setShow] = useState(false); useEffect(() => setShow(!localStorage.getItem("txthero-cookie-consent")), []); if (!show) return null; const choose = (value) => { localStorage.setItem("txthero-cookie-consent", value); setShow(false); }; return <aside className="cookie-banner"><p>TxtHero uses essential Clerk session storage and your local theme preference. Optional analytics remain disabled unless you accept.</p><button onClick={() => choose("essential")}>Essential only</button><button onClick={() => choose("all")}>Accept all</button></aside>; }

@@ -1,0 +1,95 @@
+name: Publish GitHub Desktop Release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-24.04
+    env:
+      BETTER_AUTH_SECRET: release-build-secret-not-used-at-runtime
+      BETTER_AUTH_URL: http://127.0.0.1:3210
+    steps:
+      - name: Resolve exact tested commit
+        id: source
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          DISPATCH_SHA: ${{ github.sha }}
+          DISPATCH_BRANCH: ${{ github.ref_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
+            echo "sha=$WORKFLOW_SHA" >> "$GITHUB_OUTPUT"
+            echo "branch=$WORKFLOW_BRANCH" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=$DISPATCH_SHA" >> "$GITHUB_OUTPUT"
+            echo "branch=$DISPATCH_BRANCH" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: npm ci
+      - run: npm ci --prefix frontend --legacy-peer-deps
+      - run: python -m venv backend/venv
+      - run: backend/venv/bin/python -m pip install --disable-pip-version-check -r backend/requirements.txt pyinstaller
+      - name: Stamp immutable release metadata
+        id: version
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+          SOURCE_BRANCH: ${{ steps.source.outputs.branch }}
+        run: |
+          VERSION="1.$(date -u +%Y%m%d).$(date -u +%s)"
+          TAG="v${VERSION}"
+          node scripts/prepare-release.mjs "$VERSION" "$SOURCE_SHA" "$SOURCE_BRANCH" "$TAG"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - run: backend/venv/bin/python -m unittest discover -s backend/tests -v
+        env:
+          PYTHONPATH: backend
+      - run: npm audit --audit-level=high
+      - run: npm audit --prefix frontend --audit-level=high
+      - run: npm run build
+      - run: npm run build:backend:linux
+      - name: Build and publish immutable GitHub release
+        run: npx electron-builder --linux --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TxtHero-${{ steps.version.outputs.version }}-linux
+          path: |
+            release/*.AppImage
+            release/*.deb
+            release/latest-linux.yml
+            release/*.blockmap
+          if-no-files-found: error
+          retention-days: 30

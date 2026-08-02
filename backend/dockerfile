@@ -1,0 +1,43 @@
+# syntax=docker/dockerfile:1
+
+FROM python:3.12-slim AS dependencies
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+WORKDIR /app
+COPY requirements.txt ./
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --prefix=/install -r requirements.txt
+
+# Development keeps root permissions so bind mounts work consistently across
+# Linux hosts. Compose overrides the command to enable Uvicorn reload.
+FROM python:3.12-slim AS development
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH=/usr/local/bin:${PATH}
+WORKDIR /app
+COPY --from=dependencies /install /usr/local
+COPY . .
+EXPOSE 8000
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+FROM python:3.12-slim AS production
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH=/usr/local/bin:${PATH} \
+    TXTHERO_STORAGE_DIR=/app/documents
+WORKDIR /app
+
+RUN groupadd --system --gid 10001 txthero \
+    && useradd --system --uid 10001 --gid txthero --home-dir /nonexistent --shell /usr/sbin/nologin txthero \
+    && mkdir -p /app/documents \
+    && chown txthero:txthero /app/documents
+
+COPY --from=dependencies /install /usr/local
+COPY --chown=txthero:txthero app ./app
+COPY --chown=txthero:txthero run.py ./run.py
+
+USER txthero
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
