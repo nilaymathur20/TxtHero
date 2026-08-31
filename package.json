@@ -1,0 +1,50 @@
+{
+  "name": "txthero",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "TxtHero — a fast, keyboard-first text editor for the browser.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "typecheck": "tsc -b --pretty",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "^6.18.0",
+    "@codemirror/commands": "^6.6.0",
+    "@codemirror/lang-css": "^6.3.0",
+    "@codemirror/lang-html": "^6.4.9",
+    "@codemirror/lang-javascript": "^6.2.2",
+    "@codemirror/lang-json": "^6.0.1",
+    "@codemirror/lang-markdown": "^6.3.0",
+    "@codemirror/lang-python": "^6.1.6",
+    "@codemirror/lang-xml": "^6.1.0",
+    "@codemirror/lang-yaml": "^6.1.1",
+    "@codemirror/language": "^6.10.2",
+    "@codemirror/search": "^6.5.6",
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "@codemirror/view": "^6.28.0",
+    "@lezer/highlight": "^1.2.0",
+    "marked": "^14.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.6",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.3",
+    "vitest": "^2.1.9"
+  }
+}
